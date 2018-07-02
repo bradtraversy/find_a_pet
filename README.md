@@ -4,6 +4,8 @@
 
 ## Quick Start
 
+Add your own API key to main.js
+
 ``` bash
 # Install dependencies
 npm install
