@@ -1,79 +1,112 @@
-import fetchJsonp from 'fetch-jsonp';
-import { isValidZip, showAlert } from './validate';
+import { isValidZip, showAlert } from "./validate";
 
-const petForm = document.querySelector('#pet-form');
+// require dotenv
+require("dotenv").config();
 
-petForm.addEventListener('submit', fetchAnimals);
+const petForm = document.querySelector("#pet-form");
 
-// Fetch Animals From API
+petForm.addEventListener("submit", fetchAnimals);
+
+// fetch animals from API
 function fetchAnimals(e) {
   e.preventDefault();
 
-  // Get User Input
-  const animal = document.querySelector('#animal').value;
-  const zip = document.querySelector('#zip').value;
+  // Get user Input
+  const animal = document.querySelector("#animal").value;
+  const zip = document.querySelector("#zip").value;
 
   // Validate Zip
   if (!isValidZip(zip)) {
-    showAlert('Please Enter A Valid Zipcode', 'danger');
+    showAlert("Please Enter A Valid Zipcode", "danger");
     return;
   }
 
-  // Fetch Pets
-  fetchJsonp(
-    `http://api.petfinder.com/pet.find?format=json&key=YOURKEYHERE&animal=${animal}&location=${zip}&callback=callback`,
-    {
-      jsonpCallbackFunction: 'callback'
-    }
-  )
-    .then(res => res.json())
-    .then(data => showAnimals(data.petfinder.pets.pet))
-    .catch(err => console.log(err));
+  // fetch Pets
+
+  let key = process.env.PETFINDER_API_KEY;
+  let secret = process.env.PETFINDER_API_SECRET_KEY;
+  let token;
+
+  // get authorization token
+  fetch("https://api.petfinder.com/v2/oauth2/token", {
+    method: "POST",
+    body:
+      "grant_type=client_credentials&client_id=" +
+      key +
+      "&client_secret=" +
+      secret,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      token = data.access_token;
+    })
+    .then(() => {
+      // use token to fetch animals
+      fetch(
+        `https://api.petfinder.com/v2/animals?type=${animal}&location=${zip}`,
+        {
+          method: "GET",
+          mode: "cors",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+        }
+      )
+        .then((res) => res.json())
+        .then((data) => showAnimals(data.animals));
+    })
+    .catch((err) => console.error(err));
 }
 
-// // JSONP Callback
-// function callback(data) {
-//   console.log(data);
-// }
-
-// Show Listings Of Pets
+// show listings of pets
 function showAnimals(pets) {
-  const results = document.querySelector('#results');
-  // Clear First
-  results.innerHTML = '';
-  // Loop Through Pets
-  pets.forEach(pet => {
-    console.log(pet);
-    const div = document.createElement('div');
-    div.classList.add('card', 'card-body', 'mb-3');
+  const results = document.querySelector("#results");
+
+  // clear results first
+  results.innerHTML = "";
+
+  // loop through pets
+  pets.forEach((pet) => {
+    /* console.log(pet); */
+    // create elements
+    const div = document.createElement("div");
+    div.classList.add("card", "card-body", "mb-3");
     div.innerHTML = `
       <div class="row">
         <div class="col-sm-6">
-          <h4>${pet.name.$t} (${pet.age.$t})</h4>
-          <p class="text-secondary">${pet.breeds.breed.$t}</p>
-          <p>${pet.contact.address1.$t} ${pet.contact.city.$t} ${
-      pet.contact.state.$t
-    } ${pet.contact.zip.$t}</p>
+          <h4>${pet.name} (${pet.age})</h4>
+          <p class="text-secondary">${pet.breeds.primary}</p>
+          <p>${pet.contact.address.city}, ${pet.contact.address.state} ${
+      pet.contact.address.postcode
+    }</p>
           <ul class="list-group">
-            <li class="list-group-item">Phone: ${pet.contact.phone.$t}</li>
+            <li class="list-group-item">${
+              pet.contact.phone
+                ? `<li class="list-group-item">Phone: ${pet.contact.phone}</li>`
+                : ``
+            }</li>
             ${
-              pet.contact.email.$t
-                ? `<li class="list-group-item">Email: ${
-                    pet.contact.email.$t
-                  }</li>`
+              pet.contact.email
+                ? `<li class="list-group-item">Email: ${pet.contact.email}</li>`
                 : ``
             }
-            <li class="list-group-item">Shelter ID: ${pet.shelterId.$t}</li>
+            <li class="list-group-item">Shelter ID: ${pet.organization_id}</li>
           </ul>
+        
         </div>
-        <div class="col-sm-6 text-center">
-          <img class="img-fluid rounded-circle mt-2" src="${
-            pet.media.photos.photo[3].$t
-          }">
+        <div class="col-sm-6">
+        <img class="img-fluid rounded-circle mt-2" src="${
+          pet.photos[0] ? pet.photos[0].medium : ""
+        }">
+
         </div>
       </div>
-    `;
 
+    `;
     results.appendChild(div);
   });
 }
